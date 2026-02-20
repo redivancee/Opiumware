@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -16,100 +15,57 @@ CHECK="${GREEN}✔${NC}"
 CROSS="${RED}✖${NC}"
 INFO="${CYAN}➜${NC}"
 WARN="${YELLOW}⚠${NC}"
-DBG="${YELLOW}[DBG]${NC}"
 
 DYLIB_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn907ZDaL9RvnwtPqsyrWQGdUaCf8TDJlbXuYZ3"
 MODULES_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9sVKnsuNRLpwIiVkxYvTUQnAuFbGoSEH1tPMO"
 UI_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9SqRVN7ZrzmeZJ1BNkhvFnjVlg3PaHqYESfiU"
 
-
 DEBUG=0
-if [[ "${1:-}" == "--debug" ]]; then
-    DEBUG=1
-    echo -e "${DBG} Debug mode enabled"
-fi
+[[ "${1:-}" == "--debug" ]] && DEBUG=1
 
-dbg() {
-    [[ "$DEBUG" -eq 1 ]] && echo -e "${DBG} $*"
-}
+dbg()  { [[ "$DEBUG" -eq 1 ]] && echo -e "${YELLOW}[DBG]${NC} $*" || true; }
+step() { echo -e "\n${BOLD}${CYAN}==> $1${NC}"; }
+ok()   { echo -e "${CHECK} $1"; }
+info() { echo -e "${INFO} $1"; }
+warn() { echo -e "${WARN} $1"; }
+fail() { echo -e "${CROSS} ${RED}$1${NC}"; exit 1; }
 
-# Verify a file exists and print its size + codesign status
-verify_file() {
+verify_signed() {
     local path="$1"
-    local label="${2:-$path}"
-    if [[ -f "$path" ]]; then
-        local size
-        size=$(du -sh "$path" 2>/dev/null | cut -f1)
-        echo -e "${INFO} ${BOLD}$label${NC} — exists (${size})"
-        if [[ "$DEBUG" -eq 1 ]]; then
-            local cs_out
-            cs_out=$(codesign -dvv "$path" 2>&1 || true)
-            echo -e "${DBG} codesign status for $label:"
-            echo "$cs_out" | sed "s/^/        /"
-        fi
+    if codesign -v "$path" 2>/dev/null; then
+        ok "$(basename "$path") — signed"
     else
-        echo -e "${CROSS} ${RED}MISSING: $label${NC}"
-        return 1
+        echo -e "${CROSS} ${RED}$(basename "$path") is UNSIGNED — aborting${NC}"
+        codesign -dvv "$path" 2>&1 | sed "s/^/  /"
+        exit 1
     fi
 }
 
-
 if [ -w "/Applications" ]; then
     APP_DIR="/Applications"
-    echo -e "${INFO} Installing Roblox to /Applications"
+    info "Installing to /Applications"
 else
     APP_DIR="$HOME/Applications"
     mkdir -p "$APP_DIR"
-    echo -e "${WARN} No write access to /Applications; using $APP_DIR instead."
+    warn "No write access to /Applications — using $APP_DIR"
 fi
 
 TEMP="$(mktemp -d)"
-dbg "Temp directory: $TEMP"
-
+dbg "Temp dir: $TEMP"
 
 cleanup() {
-    local exit_code=$?
-    if [[ $exit_code -ne 0 ]]; then
-        echo
-        echo -e "${RED}${BOLD}Installation failed (exit code $exit_code).${NC}"
-        echo -e "${WARN} Temp dir preserved for inspection: ${TEMP}"
+    local code=$?
+    if [[ $code -ne 0 ]]; then
+        echo -e "\n${RED}${BOLD}Installation failed (exit $code)${NC}"
+        warn "Temp dir kept for inspection: $TEMP"
     else
         rm -rf "$TEMP"
     fi
 }
 trap cleanup EXIT
 
-
-spinner() {
-    local msg="$1"
-    local pid="$2"
-    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    local i=0
-
-    while kill -0 "$pid" 2>/dev/null; do
-        printf "\r\033[K${CYAN}[${spin:i++%${#spin}:1}]${NC} %s" "$msg "
-        sleep 0.1
-    done
-
-    # Capture exit code of background job
-    local job_exit=0
-    wait "$pid" || job_exit=$?
-
-    printf "\r\033[K"
-    if [[ $job_exit -eq 0 ]]; then
-        printf "${GREEN}${CHECK} %s — Done${NC}\n" "$msg"
-    else
-        printf "${RED}${CROSS} %s — FAILED (exit $job_exit)${NC}\n" "$msg"
-        exit "$job_exit"
-    fi
-}
-
-# ─── Banner ──────────────────────────────────────────────────────────────────
-
-banner() {
-    clear
-    echo -e "${BOLD}"
-    cat <<'EOF'
+echo -e "${BOLD}"
+cat <<'EOF'
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -150,184 +106,111 @@ banner() {
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 EOF
-    echo -e "${NC}"
-    echo -e "${BLUE}=[ Opiumware (Intel) Installer ]=${NC}"
-    echo -e "${CYAN}Developed by @norbyv1${NC}"
-    [[ "$DEBUG" -eq 1 ]] && echo -e "${WARN} Running in ${BOLD}DEBUG${NC}${WARN} mode (pass --debug to enable)${NC}"
-}
+echo -e "${NC}"
+echo -e "${BLUE}=[ Opiumware (Intel) Installer ]=${NC}"
+echo -e "${CYAN}Developed by @norbyv1${NC}"
+[[ "$DEBUG" -eq 1 ]] && warn "Debug mode ON"
 
-section() {
-    echo
-    echo -e "${BOLD}${CYAN}==> $1${NC}"
-}
+step "Killing existing processes"
+killall -9 RobloxPlayer Opiumware &>/dev/null && ok "Killed existing instances" || ok "No existing instances running"
 
-main() {
-    banner
-
-    dbg "Killing existing Roblox/Opiumware processes..."
-    killall -9 RobloxPlayer Opiumware &>/dev/null || true
-
-    for target in "$APP_DIR/Roblox.app" "$APP_DIR/Opiumware.app"; do
-        if [ -e "$target" ]; then
-            dbg "Removing $target"
-            if rm -rf "$target" 2>/dev/null; then
-                echo -e "${INFO} Removed $target"
-            else
-                if sudo -n true 2>/dev/null; then
-                    echo -e "${INFO} Elevated removal required for $target"
-                    sudo rm -rf "$target" 2>/dev/null || {
-                        echo -e "${RED}${CROSS} Failed to delete $target. Please delete it manually.${NC}"
-                        exit 1
-                    }
-                else
-                    echo -e "${RED}${CROSS} Cannot remove $target — please delete it manually and rerun.${NC}"
-                    exit 1
-                fi
-            fi
-        fi
-    done
-
-    rm -rf ~/Opiumware/modules/LuauLSP ~/Opiumware/modules/decompiler
-    rm -f ~/Opiumware/modules/update.json 2>/dev/null
-
-    section "Fetching client version"
-    local version="version-6298eb58de444612"
-    echo -e "${INFO} Version: ${BOLD}$version${NC}"
-
-    section "Downloading Roblox ($version)"
-    (
-        set -euo pipefail
-        echo -e "${INFO} Downloading RobloxPlayer.zip..."
-        curl -# -L "https://setup.rbxcdn.com/mac/$version-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip"
-
-        echo -e "${INFO} Extracting..."
-        unzip -oq "$TEMP/RobloxPlayer.zip" -d "$TEMP"
-
-        echo -e "${INFO} Moving to $APP_DIR..."
-        mv "$TEMP/RobloxPlayer.app" "$APP_DIR/Roblox.app"
-        xattr -cr "$APP_DIR/Roblox.app"
-
-        echo -e "${INFO} Roblox.app installed."
-    ) & spinner "Downloading Roblox" $!
-
-
-    verify_file "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayer" "RobloxPlayer binary"
-
-    MIMALLOC_PATH="$APP_DIR/Roblox.app/Contents/MacOS/libmimalloc.3.dylib"
-    verify_file "$MIMALLOC_PATH" "libmimalloc.3.dylib (original)"
-
-    section "Installing Opiumware modules"
-    (
-        set -euo pipefail
-        echo -e "${INFO} Downloading libOpiumware..."
-        curl -# -L "$DYLIB_URL" -o "$TEMP/libOpiumware.zip"
-        unzip -oq "$TEMP/libOpiumware.zip" -d "$TEMP"
-        mv "$TEMP/libOpiumware.dylib" "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib"
-        echo -e "${INFO} libOpiumware.dylib placed."
-
-        echo -e "${INFO} Downloading modules..."
-        curl -# -L "$MODULES_URL" -o "$TEMP/modules.zip"
-        unzip -oq "$TEMP/modules.zip" -d "$TEMP"
-
-        echo -e "${INFO} Running Injector on libmimalloc.3.dylib..."
-        "$TEMP/Resources/Injector" \
-            "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib" \
-            "$MIMALLOC_PATH" \
-            --strip-codesig --all-yes 2>&1 | sed "s/^/  [injector] /" || {
-            echo -e "${RED}${CROSS} Injector failed!${NC}"
-            exit 1
-        }
-
-        PATCHED="${MIMALLOC_PATH}_patched"
-        if [[ ! -f "$PATCHED" ]]; then
-            echo -e "${RED}${CROSS} Patched dylib not found at: $PATCHED${NC}"
-            echo -e "${WARN} Contents of MacOS dir:"
-            ls -lah "$APP_DIR/Roblox.app/Contents/MacOS/" | sed "s/^/  /"
-            exit 1
-        fi
-        echo -e "${INFO} Patched dylib found: $PATCHED"
-
-        echo -e "${INFO} Replaced libmimalloc.3.dylib with patched version."
-
-        # This is the fix for: "mapped file has no cdhash, completely unsigned"
-        echo -e "${INFO} Ad-hoc signing libmimalloc.3.dylib..."
-        codesign --force --sign - "$MIMALLOC_PATH" 2>&1 | sed "s/^/  [codesign] /" || {
-            echo -e "${RED}${CROSS} Failed to sign libmimalloc.3.dylib${NC}"
-            exit 1
-        }
-        if codesign -v "$MIMALLOC_PATH" 2>/dev/null; then
-            echo -e "${CHECK} libmimalloc.3.dylib is now signed."
-        else
-            echo -e "${RED}${CROSS} libmimalloc.3.dylib signature verification failed!${NC}"
-            codesign -dvv "$MIMALLOC_PATH" 2>&1 | sed "s/^/  /"
-            exit 1
-        fi
-        echo -e "${INFO} Downloading Opiumware UI..."
-        curl -# -L "$UI_URL" -o "$TEMP/OpiumwareUI.zip"
-        unzip -oq "$TEMP/OpiumwareUI.zip" -d "$TEMP"
-
-        mkdir -p ~/Opiumware/workspace ~/Opiumware/autoexec ~/Opiumware/themes \
-                 ~/Opiumware/modules ~/Opiumware/modules/decompiler ~/Opiumware/modules/LuauLSP
-
-        mv -f "$TEMP/Resources/decompiler"  ~/Opiumware/modules/decompiler/Decompiler
-        mv -f "$TEMP/Resources/LuauLSP"     ~/Opiumware/modules/LuauLSP/LuauLSP
-        mv -f "$TEMP/Opiumware.app"          "$APP_DIR/Opiumware.app"
-
-        codesign --force --deep --sign - \
-            --identifier com.norbyv1.opiumware \
-            "$APP_DIR/Opiumware.app" 2>&1 | sed "s/^/  [codesign] /" || true
-
-        tccutil reset ScreenCapture com.norbyv1.opiumware >/dev/null 2>&1 || true
-
-        echo -e "${INFO} Modules installed."
-    ) & spinner "Installing Opiumware" $!
-
-    section "Verifying patched dylib signature"
-    if codesign -v "$MIMALLOC_PATH" 2>/dev/null; then
-        echo -e "${CHECK} libmimalloc.3.dylib — ${GREEN}valid signature${NC}"
-        dbg "$(codesign -dvv "$MIMALLOC_PATH" 2>&1)"
+step "Removing old installations"
+for target in "$APP_DIR/Roblox.app" "$APP_DIR/Opiumware.app"; do
+    if [ -e "$target" ]; then
+        rm -rf "$target" 2>/dev/null || sudo rm -rf "$target" 2>/dev/null || fail "Could not remove $target — delete it manually and rerun"
+        ok "Removed $target"
     else
-        echo -e "${CROSS} ${RED}libmimalloc.3.dylib — UNSIGNED or invalid!${NC}"
-        echo -e "${WARN} Full codesign output:"
-        codesign -dvv "$MIMALLOC_PATH" 2>&1 | sed "s/^/  /"
-        echo
-        echo -e "${RED}${BOLD}Cannot continue — Roblox will crash on launch.${NC}"
-        exit 1
+        info "$(basename "$target") not present, skipping"
     fi
+done
+rm -rf ~/Opiumware/modules/LuauLSP ~/Opiumware/modules/decompiler
+rm -f ~/Opiumware/modules/update.json 2>/dev/null || true
 
-    section "Finishing installation"
-    (
-        set -euo pipefail
+step "Fetching client version"
+VERSION="version-6298eb58de444612"
+ok "Version: $VERSION"
 
-        echo -e "${INFO} Final deep-sign of Roblox.app..."
-        codesign --force --deep --sign - "$APP_DIR/Roblox.app" 2>&1 | sed "s/^/  [codesign] /" || {
-            echo -e "${RED}${CROSS} Final codesign of Roblox.app failed${NC}"
-            exit 1
-        }
+MIMALLOC="$APP_DIR/Roblox.app/Contents/MacOS/libmimalloc.3.dylib"
 
-        rm -rf "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayerInstaller.app" 2>/dev/null || true
-        tccutil reset Accessibility com.Roblox.RobloxPlayer >/dev/null 2>&1 || true
+step "Downloading Roblox ($VERSION)"
+info "Fetching RobloxPlayer.zip..."
+curl -# -L "https://setup.rbxcdn.com/mac/$VERSION-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip" || fail "Download failed"
+info "Extracting..."
+unzip -oq "$TEMP/RobloxPlayer.zip" -d "$TEMP" || fail "Extraction failed"
+[[ -d "$TEMP/RobloxPlayer.app" ]] || fail "RobloxPlayer.app not found after extraction"
+mv "$TEMP/RobloxPlayer.app" "$APP_DIR/Roblox.app"
+xattr -cr "$APP_DIR/Roblox.app"
+ok "Roblox.app installed"
+dbg "RobloxPlayer size: $(du -sh "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayer" 2>/dev/null | cut -f1)"
+[[ -f "$MIMALLOC" ]] || fail "libmimalloc.3.dylib missing — unexpected bundle layout"
+ok "libmimalloc.3.dylib present"
 
-        echo -e "${INFO} Finished."
-    ) & spinner "Finishing" $!
+step "Downloading libOpiumware"
+curl -# -L "$DYLIB_URL" -o "$TEMP/libOpiumware.zip" || fail "libOpiumware download failed"
+unzip -oq "$TEMP/libOpiumware.zip" -d "$TEMP" || fail "libOpiumware extraction failed"
+[[ -f "$TEMP/libOpiumware.dylib" ]] || fail "libOpiumware.dylib not found in archive"
+mv "$TEMP/libOpiumware.dylib" "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib"
+ok "libOpiumware.dylib placed"
 
-    if [[ "$DEBUG" -eq 1 ]]; then
-        section "Final signature report"
-        for f in \
-            "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayer" \
-            "$MIMALLOC_PATH" \
-            "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib"
-        do
-            verify_file "$f" "$(basename "$f")"
-        done
-    fi
+step "Injecting into libmimalloc"
+curl -# -L "$MODULES_URL" -o "$TEMP/modules.zip" || fail "Modules download failed"
+unzip -oq "$TEMP/modules.zip" -d "$TEMP" || fail "Modules extraction failed"
+[[ -f "$TEMP/Resources/Injector" ]] || fail "Injector binary not found in modules archive"
+chmod +x "$TEMP/Resources/Injector"
+info "Running Injector..."
+"$TEMP/Resources/Injector" \
+    "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib" \
+    "$MIMALLOC" \
+    --strip-codesig --all-yes 2>&1 | sed "s/^/  /" || fail "Injector exited with error"
+PATCHED="${MIMALLOC}_patched"
+if [[ ! -f "$PATCHED" ]]; then
+    echo -e "${CROSS} ${RED}Patched dylib not produced. MacOS dir:${NC}"
+    ls -lah "$APP_DIR/Roblox.app/Contents/MacOS/" | sed "s/^/  /"
+    exit 1
+fi
+mv "$PATCHED" "$MIMALLOC"
+ok "libmimalloc.3.dylib patched"
 
-    echo
-    echo -e "${GREEN}${BOLD}Installation complete.${NC}"
-    echo -e "${WARN} Please use an alt account."
-    echo
-    open "$APP_DIR/Roblox.app"
-    open "$APP_DIR/Opiumware.app"
-}
+step "Signing patched libmimalloc.3.dylib"
+codesign --force --sign - "$MIMALLOC" 2>&1 | sed "s/^/  /" || fail "codesign failed on libmimalloc.3.dylib"
+verify_signed "$MIMALLOC"
 
-main "$@"
+step "Installing Opiumware UI"
+curl -# -L "$UI_URL" -o "$TEMP/OpiumwareUI.zip" || fail "UI download failed"
+unzip -oq "$TEMP/OpiumwareUI.zip" -d "$TEMP" || fail "UI extraction failed"
+mkdir -p ~/Opiumware/workspace ~/Opiumware/autoexec ~/Opiumware/themes \
+         ~/Opiumware/modules ~/Opiumware/modules/decompiler ~/Opiumware/modules/LuauLSP
+mv -f "$TEMP/Resources/decompiler" ~/Opiumware/modules/decompiler/Decompiler
+mv -f "$TEMP/Resources/LuauLSP"    ~/Opiumware/modules/LuauLSP/LuauLSP
+[[ -d "$TEMP/Opiumware.app" ]] || fail "Opiumware.app not found in UI archive"
+mv -f "$TEMP/Opiumware.app" "$APP_DIR/Opiumware.app"
+codesign --force --deep --sign - --identifier com.norbyv1.opiumware "$APP_DIR/Opiumware.app" 2>&1 | sed "s/^/  /" || true
+tccutil reset ScreenCapture com.norbyv1.opiumware >/dev/null 2>&1 || true
+ok "Opiumware.app installed"
+
+step "Final codesign"
+info "Deep-signing Roblox.app..."
+codesign --force --deep --sign - "$APP_DIR/Roblox.app" 2>&1 | sed "s/^/  /" || fail "Final codesign failed"
+rm -rf "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayerInstaller.app" 2>/dev/null || true
+tccutil reset Accessibility com.Roblox.RobloxPlayer >/dev/null 2>&1 || true
+ok "Roblox.app signed"
+
+if [[ "$DEBUG" -eq 1 ]]; then
+    step "Debug: signature report"
+    for f in \
+        "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayer" \
+        "$MIMALLOC" \
+        "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib" \
+        "$APP_DIR/Opiumware.app"
+    do
+        echo -e "${INFO} $(basename "$f")"
+        codesign -dvv "$f" 2>&1 | sed "s/^/  /"
+    done
+fi
+
+echo
+echo -e "${GREEN}${BOLD}Installation complete.${NC}"
+warn "Please use an alt account."
+echo
+open "$APP_DIR/Roblox.app"
+open "$APP_DIR/Opiumware.app"
