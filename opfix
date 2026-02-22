@@ -150,7 +150,7 @@ echo -e "  ${CYAN}[2]${NC} Intel (x86_64)"
 echo -e "  ${CYAN}[3]${NC} Auto-detect (${DETECTED_LABEL})"
 echo
 echo -en "${BOLD}Choice [1/2/3]: ${NC}"
-read -r CHOICE
+read -r CHOICE </dev/tty
 
 case "$CHOICE" in
     1) TARGET_ARCH="arm64" ;;
