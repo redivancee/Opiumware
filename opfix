@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Opiumware v2.2.0 — Installer
+# Opiumware v2.2.0 — Universal Installer
 # Troubleshooter made by dior (trial-support king)
 
 set -euo pipefail
@@ -65,6 +65,7 @@ safe_remove() {
     fi
 }
 
+# ── App dir ───────────────────────────────────────────────────────────────────
 if [ -w "/Applications" ]; then
     APP_DIR="/Applications"
 else
@@ -136,6 +137,7 @@ echo -e "${CYAN}Developed by @norbyv1${NC}"
 echo -e "${YELLOW}Troubleshooter made by dior (trial-support king)${NC}"
 [[ "$DEBUG" -eq 1 ]] && warn "Debug mode ON"
 
+# ── Arch selection ────────────────────────────────────────────────────────────
 DETECTED_ARCH=$(uname -m)
 [[ "$DETECTED_ARCH" == "arm64" ]] && DETECTED_LABEL="Apple Silicon (ARM64)" || DETECTED_LABEL="Intel (x86_64)"
 
@@ -147,7 +149,8 @@ echo -e "  ${CYAN}[1]${NC} Apple Silicon (ARM64)"
 echo -e "  ${CYAN}[2]${NC} Intel (x86_64)"
 echo -e "  ${CYAN}[3]${NC} Auto-detect (${DETECTED_LABEL})"
 echo
-read -rp "$(echo -e "${BOLD}Choice [1/2/3]: ${NC}")" CHOICE
+echo -en "${BOLD}Choice [1/2/3]: ${NC}"
+read -r CHOICE
 
 case "$CHOICE" in
     1) TARGET_ARCH="arm64" ;;
@@ -170,6 +173,7 @@ else
     echo -e "\n${INFO} Installing for: ${BOLD}Intel (x86_64)${NC}"
 fi
 
+# ── Kill + clean ──────────────────────────────────────────────────────────────
 step "Killing existing processes"
 killall -9 RobloxPlayer Opiumware &>/dev/null && ok "Killed existing instances" || ok "No existing instances running"
 
@@ -179,13 +183,14 @@ safe_remove "$APP_DIR/Opiumware.app"
 rm -rf ~/Opiumware/modules/LuauLSP ~/Opiumware/modules/decompiler 2>/dev/null || true
 rm -f ~/Opiumware/modules/update.json 2>/dev/null || true
 
+# ── Version ───────────────────────────────────────────────────────────────────
 step "Fetching client version"
 VERSION="version-6298eb58de444612"
 ok "Version: $VERSION"
 
 MIMALLOC="$APP_DIR/Roblox.app/Contents/MacOS/libmimalloc.3.dylib"
 
-
+# ── Download Roblox ───────────────────────────────────────────────────────────
 step "Downloading Roblox ($VERSION)"
 info "Fetching RobloxPlayer.zip..."
 curl -# -L "$ROBLOX_CDN/$VERSION-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip" || fail "Download failed"
@@ -199,6 +204,7 @@ dbg "RobloxPlayer size: $(du -sh "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlaye
 [[ -f "$MIMALLOC" ]] || fail "libmimalloc.3.dylib missing — unexpected bundle layout"
 ok "libmimalloc.3.dylib present"
 
+# ── Download dylib ────────────────────────────────────────────────────────────
 step "Downloading $DYLIB_NAME"
 curl -# -L "$DYLIB_URL" -o "$TEMP/$DYLIB_ZIP" || fail "dylib download failed"
 unzip -oq "$TEMP/$DYLIB_ZIP" -d "$TEMP" || fail "dylib extraction failed"
@@ -210,6 +216,7 @@ unzip -oq "$TEMP/$DYLIB_ZIP" -d "$TEMP" || fail "dylib extraction failed"
 mv "$TEMP/$DYLIB_NAME" "$APP_DIR/Roblox.app/Contents/Resources/$DYLIB_NAME"
 ok "$DYLIB_NAME placed"
 
+# ── Inject ────────────────────────────────────────────────────────────────────
 step "Injecting into libmimalloc"
 curl -# -L "$MODULES_URL" -o "$TEMP/modules.zip" || fail "Modules download failed"
 unzip -oq "$TEMP/modules.zip" -d "$TEMP" || fail "Modules extraction failed"
@@ -229,10 +236,12 @@ fi
 mv "$PATCHED" "$MIMALLOC"
 ok "libmimalloc.3.dylib patched"
 
+# ── Sign patched dylib ────────────────────────────────────────────────────────
 step "Signing patched libmimalloc.3.dylib"
 codesign --force --sign - "$MIMALLOC" 2>&1 | sed "s/^/  /" || fail "codesign failed on libmimalloc.3.dylib"
 verify_signed "$MIMALLOC"
 
+# ── Install UI ────────────────────────────────────────────────────────────────
 step "Installing Opiumware UI"
 curl -# -L "$UI_URL" -o "$TEMP/OpiumwareUI.zip" || fail "UI download failed"
 unzip -oq "$TEMP/OpiumwareUI.zip" -d "$TEMP" || fail "UI extraction failed"
@@ -246,6 +255,7 @@ codesign --force --deep --sign - --identifier com.norbyv1.opiumware "$APP_DIR/Op
 tccutil reset ScreenCapture com.norbyv1.opiumware >/dev/null 2>&1 || true
 ok "Opiumware.app installed"
 
+# ── Final codesign ────────────────────────────────────────────────────────────
 step "Final codesign"
 info "Deep-signing Roblox.app..."
 codesign --force --deep --sign - "$APP_DIR/Roblox.app" 2>&1 | sed "s/^/  /" || fail "Final codesign failed"
@@ -253,6 +263,7 @@ rm -rf "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayerInstaller.app" 2>/dev/nul
 tccutil reset Accessibility com.Roblox.RobloxPlayer >/dev/null 2>&1 || true
 ok "Roblox.app signed"
 
+# ── Debug report ──────────────────────────────────────────────────────────────
 if [[ "$DEBUG" -eq 1 ]]; then
     step "Debug: signature report"
     for f in \
