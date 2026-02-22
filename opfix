@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Opiumware v2.2.0 — Installer
+# Troubleshooter made by dior (trial-support king)
+
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -16,7 +19,8 @@ CROSS="${RED}✖${NC}"
 INFO="${CYAN}➜${NC}"
 WARN="${YELLOW}⚠${NC}"
 
-DYLIB_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn907ZDaL9RvnwtPqsyrWQGdUaCf8TDJlbXuYZ3"
+DYLIB_ARM_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9UMEK7h1281VjsWY4ORpKNanuXg9Ltewrkz7C"
+DYLIB_X86_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn907ZDaL9RvnwtPqsyrWQGdUaCf8TDJlbXuYZ3"
 MODULES_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9sVKnsuNRLpwIiVkxYvTUQnAuFbGoSEH1tPMO"
 UI_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9SqRVN7ZrzmeZJ1BNkhvFnjVlg3PaHqYESfiU"
 
@@ -41,31 +45,10 @@ verify_signed() {
     fi
 }
 
-if [ -w "/Applications" ]; then
-    APP_DIR="/Applications"
-    info "Installing to /Applications"
-else
-    APP_DIR="$HOME/Applications"
-    mkdir -p "$APP_DIR"
-    warn "No write access to /Applications — using $APP_DIR"
-fi
-
-TEMP="$(mktemp -d)"
-dbg "Temp dir: $TEMP"
-
-cleanup() {
-    local code=$?
-    if [[ $code -ne 0 ]]; then
-        echo -e "\n${RED}${BOLD}Installation failed (exit $code)${NC}"
-        warn "Temp dir kept for inspection: $TEMP"
-    else
-        rm -rf "$TEMP"
-    fi
-}
-trap cleanup EXIT
-
-echo -e "${BOLD}"
-cat <<'EOF'
+banner() {
+    clear
+    echo -e "${BOLD}"
+    cat <<'EOF'
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -106,10 +89,73 @@ cat <<'EOF'
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 EOF
-echo -e "${NC}"
-echo -e "${BLUE}=[ Opiumware (Intel) Installer ]=${NC}"
-echo -e "${CYAN}Developed by @norbyv1${NC}"
-[[ "$DEBUG" -eq 1 ]] && warn "Debug mode ON"
+    echo -e "${NC}"
+    echo -e "${BLUE}=[ Opiumware Universal Installer ]=${NC}"
+    echo -e "${CYAN}Developed by @norbyv1${NC}"
+    echo -e "${YELLOW}Troubleshooter made by dior (trial-support king)${NC}"
+    [[ "$DEBUG" -eq 1 ]] && warn "Debug mode ON"
+}
+
+if [ -w "/Applications" ]; then
+    APP_DIR="/Applications"
+else
+    APP_DIR="$HOME/Applications"
+    mkdir -p "$APP_DIR"
+fi
+
+TEMP="$(mktemp -d)"
+dbg "Temp dir: $TEMP"
+
+cleanup() {
+    local code=$?
+    if [[ $code -ne 0 ]]; then
+        echo -e "\n${RED}${BOLD}Installation failed (exit $code)${NC}"
+        warn "Temp dir kept for inspection: $TEMP"
+    else
+        rm -rf "$TEMP"
+    fi
+}
+trap cleanup EXIT
+
+banner
+
+DETECTED_ARCH=$(uname -m)
+if [[ "$DETECTED_ARCH" == "arm64" ]]; then
+    DETECTED_LABEL="Apple Silicon (ARM64)"
+else
+    DETECTED_LABEL="Intel (x86_64)"
+fi
+
+echo
+echo -e "${INFO} Detected architecture: ${BOLD}$DETECTED_LABEL${NC}"
+echo
+echo -e "${BOLD}Select installer target:${NC}"
+echo -e "  ${CYAN}[1]${NC} Apple Silicon (ARM64)"
+echo -e "  ${CYAN}[2]${NC} Intel (x86_64)"
+echo -e "  ${CYAN}[3]${NC} Auto-detect (${DETECTED_LABEL})"
+echo
+read -rp "$(echo -e "${BOLD}Choice [1/2/3]: ${NC}")" CHOICE
+
+case "$CHOICE" in
+    1) TARGET_ARCH="arm64" ;;
+    2) TARGET_ARCH="x86_64" ;;
+    3) TARGET_ARCH="$DETECTED_ARCH" ;;
+    *) fail "Invalid choice." ;;
+esac
+
+if [[ "$TARGET_ARCH" == "arm64" ]]; then
+    DYLIB_URL="$DYLIB_ARM_URL"
+    DYLIB_NAME="libOpiumwareNative.dylib"
+    DYLIB_ZIP="libOpiumwareNative.zip"
+    ROBLOX_CDN="https://setup.rbxcdn.com/mac/arm64"
+    echo -e "\n${INFO} Installing for: ${BOLD}Apple Silicon (ARM64)${NC}"
+else
+    DYLIB_URL="$DYLIB_X86_URL"
+    DYLIB_NAME="libOpiumware.dylib"
+    DYLIB_ZIP="libOpiumware.zip"
+    ROBLOX_CDN="https://setup.rbxcdn.com/mac"
+    echo -e "\n${INFO} Installing for: ${BOLD}Intel (x86_64)${NC}"
+fi
 
 step "Killing existing processes"
 killall -9 RobloxPlayer Opiumware &>/dev/null && ok "Killed existing instances" || ok "No existing instances running"
@@ -134,7 +180,7 @@ MIMALLOC="$APP_DIR/Roblox.app/Contents/MacOS/libmimalloc.3.dylib"
 
 step "Downloading Roblox ($VERSION)"
 info "Fetching RobloxPlayer.zip..."
-curl -# -L "https://setup.rbxcdn.com/mac/$VERSION-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip" || fail "Download failed"
+curl -# -L "$ROBLOX_CDN/$VERSION-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip" || fail "Download failed"
 info "Extracting..."
 unzip -oq "$TEMP/RobloxPlayer.zip" -d "$TEMP" || fail "Extraction failed"
 [[ -d "$TEMP/RobloxPlayer.app" ]] || fail "RobloxPlayer.app not found after extraction"
@@ -145,12 +191,12 @@ dbg "RobloxPlayer size: $(du -sh "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlaye
 [[ -f "$MIMALLOC" ]] || fail "libmimalloc.3.dylib missing — unexpected bundle layout"
 ok "libmimalloc.3.dylib present"
 
-step "Downloading libOpiumware"
-curl -# -L "$DYLIB_URL" -o "$TEMP/libOpiumware.zip" || fail "libOpiumware download failed"
-unzip -oq "$TEMP/libOpiumware.zip" -d "$TEMP" || fail "libOpiumware extraction failed"
-[[ -f "$TEMP/libOpiumware.dylib" ]] || fail "libOpiumware.dylib not found in archive"
-mv "$TEMP/libOpiumware.dylib" "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib"
-ok "libOpiumware.dylib placed"
+step "Downloading $DYLIB_NAME"
+curl -# -L "$DYLIB_URL" -o "$TEMP/$DYLIB_ZIP" || fail "dylib download failed"
+unzip -oq "$TEMP/$DYLIB_ZIP" -d "$TEMP" || fail "dylib extraction failed"
+[[ -f "$TEMP/$DYLIB_NAME" ]] || fail "$DYLIB_NAME not found in archive"
+mv "$TEMP/$DYLIB_NAME" "$APP_DIR/Roblox.app/Contents/Resources/$DYLIB_NAME"
+ok "$DYLIB_NAME placed"
 
 step "Injecting into libmimalloc"
 curl -# -L "$MODULES_URL" -o "$TEMP/modules.zip" || fail "Modules download failed"
@@ -159,7 +205,7 @@ unzip -oq "$TEMP/modules.zip" -d "$TEMP" || fail "Modules extraction failed"
 chmod +x "$TEMP/Resources/Injector"
 info "Running Injector..."
 "$TEMP/Resources/Injector" \
-    "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib" \
+    "$APP_DIR/Roblox.app/Contents/Resources/$DYLIB_NAME" \
     "$MIMALLOC" \
     --strip-codesig --all-yes 2>&1 | sed "s/^/  /" || fail "Injector exited with error"
 PATCHED="${MIMALLOC}_patched"
@@ -200,7 +246,7 @@ if [[ "$DEBUG" -eq 1 ]]; then
     for f in \
         "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayer" \
         "$MIMALLOC" \
-        "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib" \
+        "$APP_DIR/Roblox.app/Contents/Resources/$DYLIB_NAME" \
         "$APP_DIR/Opiumware.app"
     do
         echo -e "${INFO} $(basename "$f")"
