@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Opiumware Combined Installer
+# Base by @norbyv1 | Fixed build by trial support king dior
+
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -16,9 +19,10 @@ CROSS="${RED}✖${NC}"
 INFO="${CYAN}➜${NC}"
 WARN="${YELLOW}⚠${NC}"
 
-DYLIB_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn907ZDaL9RvnwtPqsyrWQGdUaCf8TDJlbXuYZ3"
+DYLIB_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9zhUAHX71NMWOXBTIwjKh0pvSDLcxH6FERayu"
 MODULES_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9sVKnsuNRLpwIiVkxYvTUQnAuFbGoSEH1tPMO"
-UI_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9SqRVN7ZrzmeZJ1BNkhvFnjVlg3PaHqYESfiU"
+UI_URL_NEW="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9SqRVN7ZrzmeZJ1BNkhvFnjVlg3PaHqYESfiU"
+UI_URL_LEGACY="https://f3a5dqxez3.ufs.sh/f/ijk9xZzvhn3rD2IKHTvR2QK1iVgakWyNDMPsXvcA9eG8xIHn"
 
 DEBUG=0
 [[ "${1:-}" == "--debug" ]] && DEBUG=1
@@ -41,29 +45,7 @@ verify_signed() {
     fi
 }
 
-if [ -w "/Applications" ]; then
-    APP_DIR="/Applications"
-    info "Installing to /Applications"
-else
-    APP_DIR="$HOME/Applications"
-    mkdir -p "$APP_DIR"
-    warn "No write access to /Applications — using $APP_DIR"
-fi
-
-TEMP="$(mktemp -d)"
-dbg "Temp dir: $TEMP"
-
-cleanup() {
-    local code=$?
-    if [[ $code -ne 0 ]]; then
-        echo -e "\n${RED}${BOLD}Installation failed (exit $code)${NC}"
-        warn "Temp dir kept for inspection: $TEMP"
-    else
-        rm -rf "$TEMP"
-    fi
-}
-trap cleanup EXIT
-
+clear
 echo -e "${BOLD}"
 cat <<'EOF'
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -108,16 +90,65 @@ cat <<'EOF'
 EOF
 echo -e "${NC}"
 echo -e "${BLUE}=[ Opiumware (Intel) Installer ]=${NC}"
-echo -e "${CYAN}Developed by @norbyv1${NC}"
+echo -e "${CYAN}Developed by @norbyv1 | Fixed build by trial support king dior${NC}"
 [[ "$DEBUG" -eq 1 ]] && warn "Debug mode ON"
 
+echo
+echo -e "${BOLD}Would you like to use the Old UI (Legacy)?${NC}"
+echo -e "  ${GREEN}[Y]${NC} Yes — install Legacy UI"
+echo -e "  ${CYAN}[N]${NC} No  — install latest UI  ${YELLOW}(recommended)${NC}"
+echo
+read -rp "$(echo -e "${BOLD}Choice [Y/N]: ${NC}")" UI_CHOICE
+
+case "${UI_CHOICE^^}" in
+    Y|YES)
+        UI_URL="$UI_URL_LEGACY"
+        echo -e "${CHECK} Using ${YELLOW}Legacy UI${NC}"
+        ;;
+    N|NO|"")
+        UI_URL="$UI_URL_NEW"
+        echo -e "${CHECK} Using ${GREEN}Latest UI${NC}"
+        ;;
+    *)
+        warn "Unrecognised input — defaulting to Latest UI"
+        UI_URL="$UI_URL_NEW"
+        ;;
+esac
+
+if [ -w "/Applications" ]; then
+    APP_DIR="/Applications"
+    info "Installing to /Applications"
+else
+    APP_DIR="$HOME/Applications"
+    mkdir -p "$APP_DIR"
+    warn "No write access to /Applications — using $APP_DIR"
+fi
+
+TEMP="$(mktemp -d)"
+dbg "Temp dir: $TEMP"
+
+cleanup() {
+    local code=$?
+    if [[ $code -ne 0 ]]; then
+        echo -e "\n${RED}${BOLD}Installation failed (exit $code)${NC}"
+        warn "Temp dir kept for inspection: $TEMP"
+    else
+        rm -rf "$TEMP"
+    fi
+}
+trap cleanup EXIT
+
 step "Killing existing processes"
-killall -9 RobloxPlayer Opiumware &>/dev/null && ok "Killed existing instances" || ok "No existing instances running"
+killall -9 RobloxPlayer Opiumware &>/dev/null \
+    && ok "Killed existing instances" \
+    || ok "No existing instances running"
 
 step "Removing old installations"
 for target in "$APP_DIR/Roblox.app" "$APP_DIR/Opiumware.app"; do
     if [ -e "$target" ]; then
-        rm -rf "$target" 2>/dev/null || sudo rm -rf "$target" 2>/dev/null || fail "Could not remove $target — delete it manually and rerun"
+        rm -rf "$target" 2>/dev/null \
+            || sudo rm -rf "$target" 2>/dev/null \
+            || fail "Could not remove $target — delete it manually and rerun"
         ok "Removed $target"
     else
         info "$(basename "$target") not present, skipping"
@@ -134,12 +165,16 @@ MIMALLOC="$APP_DIR/Roblox.app/Contents/MacOS/libmimalloc.3.dylib"
 
 step "Downloading Roblox ($VERSION)"
 info "Fetching RobloxPlayer.zip..."
-curl -# -L "https://setup.rbxcdn.com/mac/$VERSION-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip" || fail "Download failed"
+curl -# -L "https://setup.rbxcdn.com/mac/$VERSION-RobloxPlayer.zip" \
+    -o "$TEMP/RobloxPlayer.zip" || fail "Download failed"
 info "Extracting..."
 unzip -oq "$TEMP/RobloxPlayer.zip" -d "$TEMP" || fail "Extraction failed"
 [[ -d "$TEMP/RobloxPlayer.app" ]] || fail "RobloxPlayer.app not found after extraction"
 mv "$TEMP/RobloxPlayer.app" "$APP_DIR/Roblox.app"
-xattr -cr "$APP_DIR/Roblox.app"
+
+# Recursively strip quarantine from the entire bundle (xattr has no -r on this OS)
+find "$APP_DIR/Roblox.app" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
+
 ok "Roblox.app installed"
 dbg "RobloxPlayer size: $(du -sh "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayer" 2>/dev/null | cut -f1)"
 [[ -f "$MIMALLOC" ]] || fail "libmimalloc.3.dylib missing — unexpected bundle layout"
@@ -147,14 +182,14 @@ ok "libmimalloc.3.dylib present"
 
 step "Downloading libOpiumware"
 curl -# -L "$DYLIB_URL" -o "$TEMP/libOpiumware.zip" || fail "libOpiumware download failed"
-unzip -oq "$TEMP/libOpiumware.zip" -d "$TEMP" || fail "libOpiumware extraction failed"
+unzip -oq "$TEMP/libOpiumware.zip" -d "$TEMP"       || fail "libOpiumware extraction failed"
 [[ -f "$TEMP/libOpiumware.dylib" ]] || fail "libOpiumware.dylib not found in archive"
 mv "$TEMP/libOpiumware.dylib" "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib"
 ok "libOpiumware.dylib placed"
 
 step "Injecting into libmimalloc"
 curl -# -L "$MODULES_URL" -o "$TEMP/modules.zip" || fail "Modules download failed"
-unzip -oq "$TEMP/modules.zip" -d "$TEMP" || fail "Modules extraction failed"
+unzip -oq "$TEMP/modules.zip" -d "$TEMP"         || fail "Modules extraction failed"
 [[ -f "$TEMP/Resources/Injector" ]] || fail "Injector binary not found in modules archive"
 chmod +x "$TEMP/Resources/Injector"
 info "Running Injector..."
@@ -162,6 +197,7 @@ info "Running Injector..."
     "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib" \
     "$MIMALLOC" \
     --strip-codesig --all-yes 2>&1 | sed "s/^/  /" || fail "Injector exited with error"
+
 PATCHED="${MIMALLOC}_patched"
 if [[ ! -f "$PATCHED" ]]; then
     echo -e "${CROSS} ${RED}Patched dylib not produced. MacOS dir:${NC}"
@@ -172,25 +208,35 @@ mv "$PATCHED" "$MIMALLOC"
 ok "libmimalloc.3.dylib patched"
 
 step "Signing patched libmimalloc.3.dylib"
-codesign --force --sign - "$MIMALLOC" 2>&1 | sed "s/^/  /" || fail "codesign failed on libmimalloc.3.dylib"
+codesign --force --sign - "$MIMALLOC" 2>&1 | sed "s/^/  /" \
+    || fail "codesign failed on libmimalloc.3.dylib"
 verify_signed "$MIMALLOC"
 
 step "Installing Opiumware UI"
 curl -# -L "$UI_URL" -o "$TEMP/OpiumwareUI.zip" || fail "UI download failed"
-unzip -oq "$TEMP/OpiumwareUI.zip" -d "$TEMP" || fail "UI extraction failed"
+unzip -oq "$TEMP/OpiumwareUI.zip" -d "$TEMP"    || fail "UI extraction failed"
+
 mkdir -p ~/Opiumware/workspace ~/Opiumware/autoexec ~/Opiumware/themes \
          ~/Opiumware/modules ~/Opiumware/modules/decompiler ~/Opiumware/modules/LuauLSP
+
 mv -f "$TEMP/Resources/decompiler" ~/Opiumware/modules/decompiler/Decompiler
 mv -f "$TEMP/Resources/LuauLSP"    ~/Opiumware/modules/LuauLSP/LuauLSP
 [[ -d "$TEMP/Opiumware.app" ]] || fail "Opiumware.app not found in UI archive"
 mv -f "$TEMP/Opiumware.app" "$APP_DIR/Opiumware.app"
-codesign --force --deep --sign - --identifier com.norbyv1.opiumware "$APP_DIR/Opiumware.app" 2>&1 | sed "s/^/  /" || true
+
+# Recursively strip quarantine from the entire bundle (xattr has no -r on this OS)
+find "$APP_DIR/Opiumware.app" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
+codesign --force --deep --sign - --identifier com.norbyv1.opiumware \
+    "$APP_DIR/Opiumware.app" 2>&1 | sed "s/^/  /" || true
 tccutil reset ScreenCapture com.norbyv1.opiumware >/dev/null 2>&1 || true
 ok "Opiumware.app installed"
 
 step "Final codesign"
 info "Deep-signing Roblox.app..."
-codesign --force --deep --sign - "$APP_DIR/Roblox.app" 2>&1 | sed "s/^/  /" || fail "Final codesign failed"
+# codesign --force --deep handles re-signing all nested binaries;
+# no xattr -cr needed since quarantine was stripped individually above.
+codesign --force --deep --sign - "$APP_DIR/Roblox.app" 2>&1 | sed "s/^/  /" \
+    || fail "Final codesign failed"
 rm -rf "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayerInstaller.app" 2>/dev/null || true
 tccutil reset Accessibility com.Roblox.RobloxPlayer >/dev/null 2>&1 || true
 ok "Roblox.app signed"
