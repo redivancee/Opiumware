@@ -178,23 +178,24 @@ info "Version: ${BOLD}$VERSION${NC}"
 
 MIMALLOC="$APP_DIR/Roblox.app/Contents/MacOS/libmimalloc.3.dylib"
 
-step "Downloading Roblox - ($VERSION)"
+step "Downloading..."
 (
-    curl -# -L "https://setup.rbxcdn.com/mac/$VERSION-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip"
-    unzip -oq "$TEMP/RobloxPlayer.zip" -d "$TEMP"
-    mv "$TEMP/RobloxPlayer.app" "$APP_DIR/Roblox.app"
-    strip_quarantine "$APP_DIR/Roblox.app"
-) & spinner "Downloading" $!
-
-[[ -f "$MIMALLOC" ]] || fail "libmimalloc.3.dylib missing — unexpected bundle layout"
+    curl -fsSL "https://setup.rbxcdn.com/mac/$VERSION-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip" &
+    curl -fsSL "$DYLIB_URL"   -o "$TEMP/libOpiumware.zip" &
+    curl -fsSL "$MODULES_URL" -o "$TEMP/modules.zip" &
+    curl -fsSL "$UI_URL"      -o "$TEMP/OpiumwareUI.zip" &
+    wait
+) & spinner "Downloading..." $!
 
 step "Installing Opiumware modules"
 (
-    curl -# -L "$DYLIB_URL" -o "$TEMP/libOpiumware.zip"
+    unzip -oq "$TEMP/RobloxPlayer.zip" -d "$TEMP"
+    mv "$TEMP/RobloxPlayer.app" "$APP_DIR/Roblox.app"
+    strip_quarantine "$APP_DIR/Roblox.app"
+
     unzip -oq "$TEMP/libOpiumware.zip" -d "$TEMP"
     mv "$TEMP/libOpiumware.dylib" "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib"
 
-    curl -# -L "$MODULES_URL" -o "$TEMP/modules.zip"
     unzip -oq "$TEMP/modules.zip" -d "$TEMP"
     chmod +x "$TEMP/Resources/Injector"
     "$TEMP/Resources/Injector" \
@@ -209,7 +210,6 @@ step "Installing Opiumware modules"
     sign_target "$APP_DIR/Roblox.app" --deep
     tccutil reset Accessibility com.Roblox.RobloxPlayer >/dev/null 2>&1 || true
 
-    curl -# -L "$UI_URL" -o "$TEMP/OpiumwareUI.zip"
     unzip -oq "$TEMP/OpiumwareUI.zip" -d "$TEMP"
     mv -f "$TEMP/Opiumware.app" "$APP_DIR/Opiumware.app"
     sign_target "$APP_DIR/Opiumware.app" --deep
