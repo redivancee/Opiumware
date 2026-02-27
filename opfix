@@ -4,6 +4,7 @@
 # Base by @norbyv1 | Fixed build by trial support king dior (he is daddy trs trust)
 # mommy asmr!!!
 
+
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -99,7 +100,7 @@ echo -e "${BOLD}Would you like to use the Old UI (Legacy)?${NC}"
 echo -e "  ${GREEN}[Y]${NC} Yes — install Legacy UI"
 echo -e "  ${CYAN}[N]${NC} No  — install latest UI  ${YELLOW}(recommended)${NC}"
 echo
-read -rp "$(echo -e "${BOLD}Choice [Y/N]: ${NC}")" UI_CHOICE
+read -rp "$(echo -e "${BOLD}Choice [Y/N]: ${NC}")" UI_CHOICE </dev/tty
 
 UI_CHOICE_UPPER="$(echo "$UI_CHOICE" | tr '[:lower:]' '[:upper:]')"
 
@@ -252,6 +253,10 @@ fi
 
 echo
 echo -e "${GREEN}${BOLD}Installation complete.${NC}"
+warn "Please use an alt account."
+echo
+open "$APP_DIR/Roblox.app"
+open "$APP_DIR/Opiumware.app"
 warn "Please use an alt account."
 echo
 open "$APP_DIR/Roblox.app"
