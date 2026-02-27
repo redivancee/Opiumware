@@ -253,11 +253,7 @@ fi
 
 echo
 echo -e "${GREEN}${BOLD}Installation complete.${NC}"
-warn "Please use an alt account."
-echo
-open "$APP_DIR/Roblox.app"
-open "$APP_DIR/Opiumware.app"
-warn "Please use an alt account."
+warn "please use an alt account even though we are fully undetected cuz norby got dominated."
 echo
 open "$APP_DIR/Roblox.app"
 open "$APP_DIR/Opiumware.app"
