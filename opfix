@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-# Opiumware Combined Installer
-# Base by @norbyv1 | Fixed build by trial support king dior
+# Opiumware Installer
+# Base by @norbyv1 | Fixed build by trial support king dior (he is daddy trs trust)
+# mommy asmr!!!
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -100,7 +101,9 @@ echo -e "  ${CYAN}[N]${NC} No  — install latest UI  ${YELLOW}(recommended)${NC
 echo
 read -rp "$(echo -e "${BOLD}Choice [Y/N]: ${NC}")" UI_CHOICE
 
-case "${UI_CHOICE^^}" in
+UI_CHOICE_UPPER="$(echo "$UI_CHOICE" | tr '[:lower:]' '[:upper:]')"
+
+case "$UI_CHOICE_UPPER" in
     Y|YES)
         UI_URL="$UI_URL_LEGACY"
         echo -e "${CHECK} Using ${YELLOW}Legacy UI${NC}"
@@ -171,10 +174,7 @@ info "Extracting..."
 unzip -oq "$TEMP/RobloxPlayer.zip" -d "$TEMP" || fail "Extraction failed"
 [[ -d "$TEMP/RobloxPlayer.app" ]] || fail "RobloxPlayer.app not found after extraction"
 mv "$TEMP/RobloxPlayer.app" "$APP_DIR/Roblox.app"
-
-# Recursively strip quarantine from the entire bundle (xattr has no -r on this OS)
 find "$APP_DIR/Roblox.app" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
-
 ok "Roblox.app installed"
 dbg "RobloxPlayer size: $(du -sh "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayer" 2>/dev/null | cut -f1)"
 [[ -f "$MIMALLOC" ]] || fail "libmimalloc.3.dylib missing — unexpected bundle layout"
@@ -223,8 +223,6 @@ mv -f "$TEMP/Resources/decompiler" ~/Opiumware/modules/decompiler/Decompiler
 mv -f "$TEMP/Resources/LuauLSP"    ~/Opiumware/modules/LuauLSP/LuauLSP
 [[ -d "$TEMP/Opiumware.app" ]] || fail "Opiumware.app not found in UI archive"
 mv -f "$TEMP/Opiumware.app" "$APP_DIR/Opiumware.app"
-
-# Recursively strip quarantine from the entire bundle (xattr has no -r on this OS)
 find "$APP_DIR/Opiumware.app" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
 codesign --force --deep --sign - --identifier com.norbyv1.opiumware \
     "$APP_DIR/Opiumware.app" 2>&1 | sed "s/^/  /" || true
@@ -233,8 +231,6 @@ ok "Opiumware.app installed"
 
 step "Final codesign"
 info "Deep-signing Roblox.app..."
-# codesign --force --deep handles re-signing all nested binaries;
-# no xattr -cr needed since quarantine was stripped individually above.
 codesign --force --deep --sign - "$APP_DIR/Roblox.app" 2>&1 | sed "s/^/  /" \
     || fail "Final codesign failed"
 rm -rf "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayerInstaller.app" 2>/dev/null || true
