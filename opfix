@@ -37,7 +37,7 @@ spinner() {
     local pid="$2"
     wait "$pid"
     printf "\r\033[K"
-    printf "${GREEN}${CHECK} %s - Done${NC}\n" "$msg"
+    printf "${GREEN}${CHECK} %s - Completed${NC}\n" "$msg"
 }
 
 strip_quarantine() {
@@ -148,7 +148,6 @@ else
 fi
 
 TEMP="$(mktemp -d)"
-MIMALLOC="$APP_DIR/Roblox.app/Contents/MacOS/libmimalloc.3.dylib"
 
 cleanup() {
     local code=$?
@@ -171,28 +170,31 @@ rm -rf ~/Opiumware/modules/LuauLSP ~/Opiumware/modules/decompiler
 rm -f ~/Opiumware/modules/update.json 2>/dev/null || true
 
 step "Fetching client version"
-VERSION="version-6298eb58de444612"
+LEGACY_INST="$(curl -fsSL https://raw.githubusercontent.com/norbyv1/OpiumwareInstall/refs/heads/main/legacyinst)" \
+    || fail "Could not reach version server"
+VERSION="$(echo "$LEGACY_INST" | grep -m1 'local version=' | cut -d'"' -f2)"
+[[ -n "$VERSION" ]] || fail "Could not parse version"
 info "Version: ${BOLD}$VERSION${NC}"
 
-step "Downloading Roblox"
+MIMALLOC="$APP_DIR/Roblox.app/Contents/MacOS/libmimalloc.3.dylib"
+
+step "Downloading Roblox - ($VERSION)"
 (
-    curl -fsSL "https://setup.rbxcdn.com/mac/$VERSION-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip"
+    curl -# -L "https://setup.rbxcdn.com/mac/$VERSION-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip"
     unzip -oq "$TEMP/RobloxPlayer.zip" -d "$TEMP"
     mv "$TEMP/RobloxPlayer.app" "$APP_DIR/Roblox.app"
     strip_quarantine "$APP_DIR/Roblox.app"
-) & spinner "Downloading Roblox" $!
+) & spinner "Downloading" $!
 
 [[ -f "$MIMALLOC" ]] || fail "libmimalloc.3.dylib missing — unexpected bundle layout"
 
-step "Installing Opiumware"
+step "Installing Opiumware modules"
 (
-    curl -fsSL "$DYLIB_URL"   -o "$TEMP/libOpiumware.zip"
-    curl -fsSL "$MODULES_URL" -o "$TEMP/modules.zip"
-    curl -fsSL "$UI_URL"      -o "$TEMP/OpiumwareUI.zip"
-
+    curl -# -L "$DYLIB_URL" -o "$TEMP/libOpiumware.zip"
     unzip -oq "$TEMP/libOpiumware.zip" -d "$TEMP"
     mv "$TEMP/libOpiumware.dylib" "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib"
 
+    curl -# -L "$MODULES_URL" -o "$TEMP/modules.zip"
     unzip -oq "$TEMP/modules.zip" -d "$TEMP"
     chmod +x "$TEMP/Resources/Injector"
     "$TEMP/Resources/Injector" \
@@ -207,16 +209,16 @@ step "Installing Opiumware"
     sign_target "$APP_DIR/Roblox.app" --deep
     tccutil reset Accessibility com.Roblox.RobloxPlayer >/dev/null 2>&1 || true
 
+    curl -# -L "$UI_URL" -o "$TEMP/OpiumwareUI.zip"
     unzip -oq "$TEMP/OpiumwareUI.zip" -d "$TEMP"
+    mv -f "$TEMP/Opiumware.app" "$APP_DIR/Opiumware.app"
+    sign_target "$APP_DIR/Opiumware.app" --deep
     mkdir -p ~/Opiumware/workspace ~/Opiumware/autoexec ~/Opiumware/themes \
              ~/Opiumware/modules ~/Opiumware/modules/decompiler ~/Opiumware/modules/LuauLSP
     mv -f "$TEMP/Resources/decompiler" ~/Opiumware/modules/decompiler/Decompiler
     mv -f "$TEMP/Resources/LuauLSP"    ~/Opiumware/modules/LuauLSP/LuauLSP
-    mv -f "$TEMP/Opiumware.app"        "$APP_DIR/Opiumware.app"
-    strip_quarantine "$APP_DIR/Opiumware.app"
-    sign_target "$APP_DIR/Opiumware.app" --deep
     tccutil reset ScreenCapture com.norbyv1.opiumware >/dev/null 2>&1 || true
-) & spinner "Installing Opiumware" $!
+) & spinner "Installing" $!
 
 if [[ "$DEBUG" -eq 1 ]]; then
     step "Debug: signature report"
