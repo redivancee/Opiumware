@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 
-# Opiumware Installer
-# Base by @norbyv1 | Fixed build by trial support king dior (he is daddy trs trust)
-# mommy asmr!!!
-
+# Opiumware Combined Installer
+# Base by @norbyv1 | Fixed build by trial support king dior
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -21,8 +19,6 @@ CROSS="${RED}✖${NC}"
 INFO="${CYAN}➜${NC}"
 WARN="${YELLOW}⚠${NC}"
 
-DYLIB_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9zhUAHX71NMWOXBTIwjKh0pvSDLcxH6FERayu"
-MODULES_URL="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9sVKnsuNRLpwIiVkxYvTUQnAuFbGoSEH1tPMO"
 UI_URL_NEW="https://x099xkycxe.ufs.sh/f/ar75CUBjeUn9SqRVN7ZrzmeZJ1BNkhvFnjVlg3PaHqYESfiU"
 UI_URL_LEGACY="https://f3a5dqxez3.ufs.sh/f/ijk9xZzvhn3rD2IKHTvR2QK1iVgakWyNDMPsXvcA9eG8xIHn"
 
@@ -35,6 +31,27 @@ ok()   { echo -e "${CHECK} $1"; }
 info() { echo -e "${INFO} $1"; }
 warn() { echo -e "${WARN} $1"; }
 fail() { echo -e "${CROSS} ${RED}$1${NC}"; exit 1; }
+
+strip_quarantine() {
+    local target="$1"
+    if xattr -cr "$target" 2>/dev/null; then
+        return 0
+    fi
+    find "$target" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
+}
+
+sign_target() {
+    local target="$1"
+    local deep="${2:-}"
+    if [[ "$deep" == "--deep" ]]; then
+        codesign --force --deep --sign - "$target" 2>/dev/null && return 0
+        codesign --force --deep --sign - --preserve-metadata=identifier,entitlements "$target" 2>/dev/null && return 0
+    else
+        codesign --force --sign - "$target" 2>/dev/null && return 0
+        codesign --force --sign - --preserve-metadata=identifier,entitlements "$target" 2>/dev/null && return 0
+    fi
+    fail "codesign failed on $(basename "$target")"
+}
 
 verify_signed() {
     local path="$1"
@@ -94,6 +111,16 @@ echo -e "${NC}"
 echo -e "${BLUE}=[ Opiumware (Intel) Installer ]=${NC}"
 echo -e "${CYAN}Developed by @norbyv1 | Fixed build by trial support king dior${NC}"
 [[ "$DEBUG" -eq 1 ]] && warn "Debug mode ON"
+
+step "Fetching latest URLs"
+REMOTE_INST="$(curl -fsSL https://raw.githubusercontent.com/norbyv1/OpiumwareInstall/main/inst)" \
+    || fail "Could not fetch remote installer for URL detection"
+DYLIB_URL="$(echo "$REMOTE_INST" | grep -m1 '^DYLIB_URL=' | cut -d'"' -f2)"
+MODULES_URL="$(echo "$REMOTE_INST" | grep -m1 '^MODULES_URL=' | cut -d'"' -f2)"
+[[ -n "$DYLIB_URL" ]]   || fail "Could not parse DYLIB_URL from remote installer"
+[[ -n "$MODULES_URL" ]] || fail "Could not parse MODULES_URL from remote installer"
+ok "DYLIB_URL:   $DYLIB_URL"
+ok "MODULES_URL: $MODULES_URL"
 
 echo
 echo -e "${BOLD}Would you like to use the Old UI (Legacy)?${NC}"
@@ -167,76 +194,79 @@ ok "Version: $VERSION"
 
 MIMALLOC="$APP_DIR/Roblox.app/Contents/MacOS/libmimalloc.3.dylib"
 
-step "Downloading Roblox ($VERSION)"
-info "Fetching RobloxPlayer.zip..."
-curl -# -L "https://setup.rbxcdn.com/mac/$VERSION-RobloxPlayer.zip" \
-    -o "$TEMP/RobloxPlayer.zip" || fail "Download failed"
-info "Extracting..."
-unzip -oq "$TEMP/RobloxPlayer.zip" -d "$TEMP" || fail "Extraction failed"
+step "Downloading (parallel)"
+curl -fsSL "https://setup.rbxcdn.com/mac/$VERSION-RobloxPlayer.zip" -o "$TEMP/RobloxPlayer.zip" &
+PID_ROBLOX=$!
+curl -fsSL "$DYLIB_URL"    -o "$TEMP/libOpiumware.zip" &
+PID_DYLIB=$!
+curl -fsSL "$MODULES_URL"  -o "$TEMP/modules.zip" &
+PID_MODULES=$!
+curl -fsSL "$UI_URL"       -o "$TEMP/OpiumwareUI.zip" &
+PID_UI=$!
+
+wait $PID_ROBLOX  || fail "RobloxPlayer download failed"
+ok "RobloxPlayer.zip"
+wait $PID_DYLIB   || fail "libOpiumware download failed"
+ok "libOpiumware.zip"
+wait $PID_MODULES || fail "Modules download failed"
+ok "modules.zip"
+wait $PID_UI      || fail "UI download failed"
+ok "OpiumwareUI.zip"
+
+step "Installing Roblox"
+unzip -oq "$TEMP/RobloxPlayer.zip" -d "$TEMP" || fail "RobloxPlayer extraction failed"
 [[ -d "$TEMP/RobloxPlayer.app" ]] || fail "RobloxPlayer.app not found after extraction"
 mv "$TEMP/RobloxPlayer.app" "$APP_DIR/Roblox.app"
-find "$APP_DIR/Roblox.app" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
+strip_quarantine "$APP_DIR/Roblox.app"
 ok "Roblox.app installed"
-dbg "RobloxPlayer size: $(du -sh "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayer" 2>/dev/null | cut -f1)"
 [[ -f "$MIMALLOC" ]] || fail "libmimalloc.3.dylib missing — unexpected bundle layout"
 ok "libmimalloc.3.dylib present"
 
-step "Downloading libOpiumware"
-curl -# -L "$DYLIB_URL" -o "$TEMP/libOpiumware.zip" || fail "libOpiumware download failed"
-unzip -oq "$TEMP/libOpiumware.zip" -d "$TEMP"       || fail "libOpiumware extraction failed"
+step "Installing libOpiumware"
+unzip -oq "$TEMP/libOpiumware.zip" -d "$TEMP" || fail "libOpiumware extraction failed"
 [[ -f "$TEMP/libOpiumware.dylib" ]] || fail "libOpiumware.dylib not found in archive"
 mv "$TEMP/libOpiumware.dylib" "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib"
 ok "libOpiumware.dylib placed"
 
 step "Injecting into libmimalloc"
-curl -# -L "$MODULES_URL" -o "$TEMP/modules.zip" || fail "Modules download failed"
-unzip -oq "$TEMP/modules.zip" -d "$TEMP"         || fail "Modules extraction failed"
-[[ -f "$TEMP/Resources/Injector" ]] || fail "Injector binary not found in modules archive"
+unzip -oq "$TEMP/modules.zip" -d "$TEMP" || fail "Modules extraction failed"
+[[ -f "$TEMP/Resources/Injector" ]] || fail "Injector binary not found"
 chmod +x "$TEMP/Resources/Injector"
-info "Running Injector..."
 "$TEMP/Resources/Injector" \
     "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib" \
     "$MIMALLOC" \
     --strip-codesig --all-yes 2>&1 | sed "s/^/  /" || fail "Injector exited with error"
-
 PATCHED="${MIMALLOC}_patched"
-if [[ ! -f "$PATCHED" ]]; then
+[[ -f "$PATCHED" ]] || {
     echo -e "${CROSS} ${RED}Patched dylib not produced. MacOS dir:${NC}"
     ls -lah "$APP_DIR/Roblox.app/Contents/MacOS/" | sed "s/^/  /"
     exit 1
-fi
+}
 mv "$PATCHED" "$MIMALLOC"
 ok "libmimalloc.3.dylib patched"
 
-step "Signing patched libmimalloc.3.dylib"
-codesign --force --sign - "$MIMALLOC" 2>&1 | sed "s/^/  /" \
-    || fail "codesign failed on libmimalloc.3.dylib"
+step "Codesigning"
+sign_target "$APP_DIR/Roblox.app/Contents/Resources/libOpiumware.dylib"
+ok "libOpiumware.dylib signed"
+sign_target "$MIMALLOC"
 verify_signed "$MIMALLOC"
+rm -rf "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayerInstaller.app" 2>/dev/null || true
+sign_target "$APP_DIR/Roblox.app" --deep
+ok "Roblox.app signed"
+tccutil reset Accessibility com.Roblox.RobloxPlayer >/dev/null 2>&1 || true
 
 step "Installing Opiumware UI"
-curl -# -L "$UI_URL" -o "$TEMP/OpiumwareUI.zip" || fail "UI download failed"
-unzip -oq "$TEMP/OpiumwareUI.zip" -d "$TEMP"    || fail "UI extraction failed"
-
+unzip -oq "$TEMP/OpiumwareUI.zip" -d "$TEMP" || fail "UI extraction failed"
 mkdir -p ~/Opiumware/workspace ~/Opiumware/autoexec ~/Opiumware/themes \
          ~/Opiumware/modules ~/Opiumware/modules/decompiler ~/Opiumware/modules/LuauLSP
-
 mv -f "$TEMP/Resources/decompiler" ~/Opiumware/modules/decompiler/Decompiler
 mv -f "$TEMP/Resources/LuauLSP"    ~/Opiumware/modules/LuauLSP/LuauLSP
 [[ -d "$TEMP/Opiumware.app" ]] || fail "Opiumware.app not found in UI archive"
 mv -f "$TEMP/Opiumware.app" "$APP_DIR/Opiumware.app"
-find "$APP_DIR/Opiumware.app" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
-codesign --force --deep --sign - --identifier com.norbyv1.opiumware \
-    "$APP_DIR/Opiumware.app" 2>&1 | sed "s/^/  /" || true
+strip_quarantine "$APP_DIR/Opiumware.app"
+sign_target "$APP_DIR/Opiumware.app" --deep
+ok "Opiumware.app signed"
 tccutil reset ScreenCapture com.norbyv1.opiumware >/dev/null 2>&1 || true
-ok "Opiumware.app installed"
-
-step "Final codesign"
-info "Deep-signing Roblox.app..."
-codesign --force --deep --sign - "$APP_DIR/Roblox.app" 2>&1 | sed "s/^/  /" \
-    || fail "Final codesign failed"
-rm -rf "$APP_DIR/Roblox.app/Contents/MacOS/RobloxPlayerInstaller.app" 2>/dev/null || true
-tccutil reset Accessibility com.Roblox.RobloxPlayer >/dev/null 2>&1 || true
-ok "Roblox.app signed"
 
 if [[ "$DEBUG" -eq 1 ]]; then
     step "Debug: signature report"
@@ -253,7 +283,7 @@ fi
 
 echo
 echo -e "${GREEN}${BOLD}Installation complete.${NC}"
-warn "please use an alt account even though we are fully undetected cuz norby got dominated."
+warn "Please use an alt account."
 echo
 open "$APP_DIR/Roblox.app"
 open "$APP_DIR/Opiumware.app"
